@@ -17,7 +17,7 @@ byte b_LowByte;
 byte b_HighByte;
 
 int calInitialized = false;
-int calStartTime;
+long calStartTime;
 int startingPos;
 int slideUp;
 int slideDown;
@@ -62,6 +62,8 @@ void setup() {
   drive_LeftMotor.attach(leftMotorPin);
   pinMode(rightMotorPin, OUTPUT);
   drive_RightMotor.attach(rightMotorPin);
+  drive_LeftMotor.writeMicroseconds(1500);
+  drive_RightMotor.writeMicroseconds(1500);
   slideMotor.write(slideUp);//start with the slide up so bot can traverse power packs
   b_LowByte = EEPROM.read(leftMotorOffsetAddressL);
   b_HighByte = EEPROM.read(leftMotorOffsetAddressH);
@@ -81,47 +83,49 @@ void loop() {
   Serial.println(uSData[1]);
   Serial.print("Motor offset:");
   Serial.println(leftMotorOffset);
-
+  leftMotorOffset = constrain(leftMotorOffset, -50, 50);
   leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;
   rightMotorSpeed = defaultDriveSpeed;
   //Calibration
   if (checkButton() == true && (millis() - calStartTime > 10000)) {
     Serial.println("Calibration initiated");
-    if (!calInitialized) {
-      calInitialized = true;
-      calStartTime = millis();
-      checkSensor(1);
-      startingPos = uSData[1];
-      leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;
-      rightMotorSpeed = defaultDriveSpeed;
-      drive_LeftMotor.writeMicroseconds(leftMotorSpeed);
-      drive_RightMotor.writeMicroseconds(rightMotorSpeed);
-    }
+    calStartTime = millis();
+    checkSensor(1);
+    startingPos = uSData[1];
+    leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;
+    rightMotorSpeed = defaultDriveSpeed;
+    drive_LeftMotor.writeMicroseconds(leftMotorSpeed);
+    drive_RightMotor.writeMicroseconds(rightMotorSpeed);
     while (millis() - calStartTime < 3000) {
       //do nothing until 3 seconds have passed
     }
+    Serial.print("LEFT MOTOR SPEED: ");
+    Serial.println(leftMotorSpeed);
+    Serial.print("RIGHT MOTOR SPEED: ");
+    Serial.println(rightMotorSpeed);
     checkSensor(1);
     leftMotorOffset += (startingPos - uSData[1]) * .05; //motor offset is a function of the final difference in ping times
-    calInitialized = false;
+    leftMotorOffset = constrain(leftMotorOffset, -50, 50);
   }
 
   EEPROM.write(leftMotorOffsetAddressL, lowByte(leftMotorOffset));
   EEPROM.write(leftMotorOffsetAddressH, highByte(leftMotorOffset));
   drive_LeftMotor.writeMicroseconds(1500);
   drive_RightMotor.writeMicroseconds(1500);
+  Serial.println("Motors Stopped");
 
-
+  stage=2;
   switch (stage) {
     case (1):
       //sweep arm from back to side incase cube is in back corner
-      sweepMotor.writeMicroseconds(1600);
-      delay(700);//change this delay to increase/decrease the sweep angle
+      sweepMotor.writeMicroseconds(1300);
+      delay(300);//change this delay to increase/decrease the sweep angle
       sweepMotor.writeMicroseconds(1500);//sweep arm should be in left position now
       Serial.println("Arm swept");
-      stage++;
+    //stage++;
     case (2):
       checkSensor(1);
-      checkSensor(2);
+      checkSensor(0);
       drive_LeftMotor.writeMicroseconds(leftMotorSpeed);
       drive_RightMotor.writeMicroseconds(rightMotorSpeed);
       //check side ultrasonic sensor to see if we are close enough to the wall
@@ -136,10 +140,11 @@ void loop() {
         rightMotorSpeed -= driveCor;
         //too close to wall, need to correct path
       }
+      Serial.println();
       if (uSData[2] < wallDone) {
         //the bot has sweeped the whole wall, now we need to sweep the corner and then move on
 
-        stage++;
+        //stage++;
       }
     case (3):
       //need to back up from the wall first
