@@ -1,9 +1,24 @@
 #include <Servo.h>
+#include <Wire.h>
+#include <uSTimer2.h>
+#include <EEPROM.h>
 Servo drive_LeftMotor;
 Servo drive_RightMotor;
 Servo slideMotor;
 Servo sweepMotor;
 
+const int leftMotorOffsetAddressL = 0;
+const int leftMotorOffsetAddressH = 1;
+
+const int calibrateBtn = 13;
+
+int leftMotorOffset;
+byte b_LowByte;
+byte b_HighByte;
+
+int calInitialized = false;
+int calStartTime;
+int startingPos;
 int slideUp;
 int slideDown;
 int sweepSidePos;
@@ -11,24 +26,34 @@ int wallDone;
 int stage;
 int sideVal;
 int backVal;
-int driveCor=5;//change this to modify how much the drive motors should be corrected when bot too close/too far from wall
-int wallTolerance=10;
+int driveCor = 5; //change this to modify how much the drive motors should be corrected when bot too close/too far from wall
+int wallTolerance = 10;
+int defaultDriveSpeed = 1800;
 int leftMotorSpeed;
 int rightMotorSpeed;
 int pyramidSensed;//ping time where pyramid is infront of us
 
 const int slideMotorPin;
-const int sweepMotorPin;
-const int leftMotorPin=9;
-const int rightMotorPin=8;
+const int sweepMotorPin = 10;
+const int leftMotorPin = 9;
+const int rightMotorPin = 8;
 const int pyramidButton;
 
-float uSData[4];
+float uSData[3];
 int irData = 0;
 
 void setup() {
   Serial.begin(2400);
-
+  Wire.begin();
+   pinMode(2,OUTPUT);
+  pinMode(3,INPUT);
+  pinMode(4, OUTPUT);
+  pinMode(5,INPUT);
+  pinMode(6,OUTPUT);
+  pinMode(7,INPUT);
+  pinMode(13,INPUT);
+  
+  Serial.println("Commenced");
   pinMode(slideMotorPin, OUTPUT);
   slideMotor.attach(slideMotorPin);
   pinMode(sweepMotorPin, OUTPUT);
@@ -38,52 +63,122 @@ void setup() {
   pinMode(rightMotorPin, OUTPUT);
   drive_RightMotor.attach(rightMotorPin);
   slideMotor.write(slideUp);//start with the slide up so bot can traverse power packs
+  b_LowByte = EEPROM.read(leftMotorOffsetAddressL);
+  b_HighByte = EEPROM.read(leftMotorOffsetAddressH);
+  leftMotorOffset = word(b_LowByte, b_HighByte);
+  Serial.println("EEPROM read");
+  //stage=1;
 }
 void loop() {
+/*
+  Serial.println(stage);
+  Serial.print("Left motor speed:");
+  Serial.println(leftMotorSpeed);
+  Serial.print("Right motor speed:");
+  Serial.println(rightMotorSpeed);
+  */
+  
+  Serial.print("Motor offset:");
+  Serial.println(leftMotorOffset);
+ 
+  leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;
+  rightMotorSpeed = defaultDriveSpeed;
+  Serial.println(digitalRead(calibrateBtn));
+  if (digitalRead(calibrateBtn) == HIGH) {
+    Serial.println("Calibration initiated");
+    if (!calInitialized) {
+      calInitialized = true;
+      calStartTime = millis();
+      checkSensor(1);
+      startingPos = uSData[1];
+    }
+    while (millis() - calStartTime < 5000) {
+      leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;
+      rightMotorSpeed = defaultDriveSpeed;
+      drive_LeftMotor.writeMicroseconds(leftMotorSpeed);
+      drive_RightMotor.writeMicroseconds(rightMotorSpeed);
+      checkSensor(1);
+      Serial.print("US: ");
+      Serial.println(uSData[2]);
+      if (uSData[1] > startingPos) {
+        leftMotorOffset--;
+      }
+      else if (uSData[1] < startingPos) {
+        leftMotorOffset++;
+      }
+    }
+
+    EEPROM.write(leftMotorOffsetAddressL, lowByte(leftMotorOffset));
+    EEPROM.write(leftMotorOffsetAddressH, highByte(leftMotorOffset));
+
+  }
+
   switch (stage) {
     case (1):
       //sweep arm from back to side incase cube is in back corner
       sweepMotor.writeMicroseconds(1600);
-      delay(100);//change this delay to increase/decrease the sweep angle
+      delay(700);//change this delay to increase/decrease the sweep angle
       sweepMotor.writeMicroseconds(1500);//sweep arm should be in left position now
-      leftMotorSpeed=1600;
-      rightMotorSpeed=1600;
+      Serial.println("Arm swept");
       stage++;
     case (2):
+      checkSensor(1);
       checkSensor(2);
-      checkSensor(0);
       drive_LeftMotor.writeMicroseconds(leftMotorSpeed);
       drive_RightMotor.writeMicroseconds(rightMotorSpeed);
       //check side ultrasonic sensor to see if we are close enough to the wall
-      if (uSData[2] > sideVal+wallTolerance) {
-        leftMotorSpeed-=driveCor;
-        rightMotorSpeed+=driveCor;
+      if (uSData[1] > sideVal + wallTolerance) {
+
+        leftMotorSpeed -= driveCor;
+        rightMotorSpeed += driveCor;
         //too far from wall, need to correct path
       }
-      else if (uSData[2]<sideVal-wallTolerance){
-        leftMotorSpeed+=driveCor;
-        rightMotorSpeed-=driveCor;
+      else if (uSData[1] < sideVal - wallTolerance) {
+        leftMotorSpeed += driveCor;
+        rightMotorSpeed -= driveCor;
         //too close to wall, need to correct path
       }
-      if (uSData[0] < wallDone) {
+      if (uSData[2] < wallDone) {
         //the bot has sweeped the whole wall, now we need to sweep the corner and then move on
-        drive_LeftMotor.writeMicroseconds(1600);
-        drive_RightMotor.writeMicroseconds(1450);
-        delay(500);//time we want to turn for
-        drive_LeftMotor.writeMicroseconds(1400);
-        drive_RightMotor.writeMicroseconds(1400);
-        do{
-        checkSensor(3);
-        }while(uSData[4]>backVal);//keep backing up until we are close enough to the wall behind us
-        drive_LeftMotor.writeMicroseconds(1500);
-        drive_RightMotor.writeMicroseconds(1500);//stop
-        sweepMotor.writeMicroseconds(1400);
-        delay(350);
-        sweepMotor.writeMicroseconds(1500);
+
         stage++;
       }
-
     case (3):
+      //need to back up from the wall first
+      drive_LeftMotor.writeMicroseconds(1400 - leftMotorOffset);
+      drive_RightMotor.writeMicroseconds(1400);
+      while (uSData[0] < wallDone + 50) { //once ultrasonic ping is 50 away from the wall we can stop backing up
+        checkSensor(0);
+      }
+      drive_LeftMotor.writeMicroseconds(1500);
+      drive_RightMotor.writeMicroseconds(1500);
+      stage++;
+    case (4):
+      drive_LeftMotor.writeMicroseconds(1600);
+      delay(100);
+      do {
+        checkSensor(2);//keep turning until we are against a wall again
+      } while (uSData[2] > sideVal);
+      drive_LeftMotor.writeMicroseconds(1400 - leftMotorOffset);
+      drive_RightMotor.writeMicroseconds(1400);
+      do {
+        checkSensor(3);
+      } while (uSData[4] > backVal); //keep backing up until we are close enough to the wall behind us
+      drive_LeftMotor.writeMicroseconds(1500);
+      drive_RightMotor.writeMicroseconds(1500);//stop
+      sweepMotor.writeMicroseconds(1400);
+      delay(350);//sweep arm
+      sweepMotor.writeMicroseconds(1500);
+    case (5):
+      drive_LeftMotor.writeMicroseconds(1600);
+      drive_RightMotor.writeMicroseconds(1550);
+      do {
+        checkIR();
+      } while (irData != 69 || irData != 65);
+      drive_LeftMotor.writeMicroseconds(leftMotorSpeed);
+      drive_RightMotor.writeMicroseconds(rightMotorSpeed);//drive straight towards the pyramid
+      stage++;
+    case (6):
       if (uSData[1] < pyramidSensed) {
         //pyramid is sensed
         slideMotor.write(slideDown);//drop the slide
@@ -92,11 +187,18 @@ void loop() {
       }
   }
 }
-void checkSensor(const int uStoCheck) { //sensors are numbered 0-2 (0 is front, 1 is raised front, 2 is side, 3 is back)
-  digitalWrite(uStoCheck, HIGH);
+inline void checkSensor(int uStoCheck) { //sensors are numbered 0-2 (0 is front, 1 is side, 2 is back)
+  int x=uStoCheck*2+2;
+  digitalWrite(x,LOW);
   delayMicroseconds(10);
-  digitalWrite(uStoCheck, LOW);
-  uSData[uStoCheck] = pulseIn(uStoCheck, HIGH, 10000);
+  digitalWrite(x, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(x, LOW);
+  uSData[uStoCheck] = pulseIn(x + 1, HIGH);
+  Serial.print("Sensor ");
+  Serial.print(uStoCheck);
+  Serial.print(":");
+  Serial.println(uSData[uStoCheck]);
 }
 void checkIR() {
   if (Serial.available() > 0) {
