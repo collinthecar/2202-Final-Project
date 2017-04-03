@@ -28,7 +28,7 @@ int sideVal;
 int backVal;
 int driveCor = 5; //change this to modify how much the drive motors should be corrected when bot too close/too far from wall
 int wallTolerance = 10;
-int defaultDriveSpeed = 1800;
+int defaultDriveSpeed = 1700;
 int leftMotorSpeed;
 int rightMotorSpeed;
 int pyramidSensed;//ping time where pyramid is infront of us
@@ -45,14 +45,14 @@ int irData = 0;
 void setup() {
   Serial.begin(2400);
   Wire.begin();
-   pinMode(2,OUTPUT);
-  pinMode(3,INPUT);
+  pinMode(2, OUTPUT);
+  pinMode(3, INPUT);
   pinMode(4, OUTPUT);
-  pinMode(5,INPUT);
-  pinMode(6,OUTPUT);
-  pinMode(7,INPUT);
-  pinMode(13,INPUT);
-  
+  pinMode(5, INPUT);
+  pinMode(6, OUTPUT);
+  pinMode(7, INPUT);
+  pinMode(13, INPUT_PULLUP);
+
   Serial.println("Commenced");
   pinMode(slideMotorPin, OUTPUT);
   slideMotor.attach(slideMotorPin);
@@ -70,21 +70,21 @@ void setup() {
   //stage=1;
 }
 void loop() {
-/*
-  Serial.println(stage);
-  Serial.print("Left motor speed:");
-  Serial.println(leftMotorSpeed);
-  Serial.print("Right motor speed:");
-  Serial.println(rightMotorSpeed);
+  /*
+    Serial.println(stage);
+    Serial.print("Left motor speed:");
+    Serial.println(leftMotorSpeed);
+    Serial.print("Right motor speed:");
+    Serial.println(rightMotorSpeed);
   */
-  
+  checkSensor(1);
+  Serial.println(uSData[1]);
   Serial.print("Motor offset:");
   Serial.println(leftMotorOffset);
- 
+
   leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;
   rightMotorSpeed = defaultDriveSpeed;
-  Serial.println(digitalRead(calibrateBtn));
-  if (digitalRead(calibrateBtn) == HIGH) {
+  if (checkButton()==true && (millis()-calStartTime>10000)) {
     Serial.println("Calibration initiated");
     if (!calInitialized) {
       calInitialized = true;
@@ -92,24 +92,26 @@ void loop() {
       checkSensor(1);
       startingPos = uSData[1];
     }
-    while (millis() - calStartTime < 5000) {
+    while (millis() - calStartTime < 3000) {
       leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;
       rightMotorSpeed = defaultDriveSpeed;
       drive_LeftMotor.writeMicroseconds(leftMotorSpeed);
       drive_RightMotor.writeMicroseconds(rightMotorSpeed);
       checkSensor(1);
       Serial.print("US: ");
-      Serial.println(uSData[2]);
-      if (uSData[1] > startingPos) {
+      Serial.println(uSData[1]);
+      if (uSData[1] > startingPos+100) {
         leftMotorOffset--;
       }
-      else if (uSData[1] < startingPos) {
+      else if (uSData[1] < startingPos-100) {
         leftMotorOffset++;
       }
     }
-
+    calInitialized=false;
     EEPROM.write(leftMotorOffsetAddressL, lowByte(leftMotorOffset));
     EEPROM.write(leftMotorOffsetAddressH, highByte(leftMotorOffset));
+    drive_LeftMotor.writeMicroseconds(1500);
+    drive_RightMotor.writeMicroseconds(1500);
 
   }
 
@@ -187,14 +189,34 @@ void loop() {
       }
   }
 }
+boolean checkButton() {
+  int buttonVal = digitalRead(calibrateBtn);
+  if (buttonVal == LOW) {
+    delay(20);
+    buttonVal = digitalRead(calibrateBtn);
+    if (buttonVal == LOW) {
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+  else {
+    return false;
+  }
+}
 inline void checkSensor(int uStoCheck) { //sensors are numbered 0-2 (0 is front, 1 is side, 2 is back)
-  int x=uStoCheck*2+2;
-  digitalWrite(x,LOW);
+  int x = uStoCheck * 2 + 2;
+  int totalPing=0;
+  for (int i=0;i<10;i++){
+  digitalWrite(x, LOW);
   delayMicroseconds(10);
   digitalWrite(x, HIGH);
   delayMicroseconds(10);
   digitalWrite(x, LOW);
-  uSData[uStoCheck] = pulseIn(x + 1, HIGH);
+  totalPing+=pulseIn(x+1,HIGH);
+  }
+  uSData[uStoCheck] =totalPing/10;
   Serial.print("Sensor ");
   Serial.print(uStoCheck);
   Serial.print(":");
