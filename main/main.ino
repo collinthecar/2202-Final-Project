@@ -52,7 +52,6 @@ void setup() {
   pinMode(6, OUTPUT);
   pinMode(7, INPUT);
   pinMode(13, INPUT_PULLUP);
-
   Serial.println("Commenced");
   pinMode(slideMotorPin, OUTPUT);
   slideMotor.attach(slideMotorPin);
@@ -62,8 +61,6 @@ void setup() {
   drive_LeftMotor.attach(leftMotorPin);
   pinMode(rightMotorPin, OUTPUT);
   drive_RightMotor.attach(rightMotorPin);
-  drive_LeftMotor.writeMicroseconds(1500);
-  drive_RightMotor.writeMicroseconds(1500);
   slideMotor.write(slideUp);//start with the slide up so bot can traverse power packs
   b_LowByte = EEPROM.read(leftMotorOffsetAddressL);
   b_HighByte = EEPROM.read(leftMotorOffsetAddressH);
@@ -80,9 +77,9 @@ void loop() {
     Serial.println(rightMotorSpeed);
   */
   checkSensor(1);
-  Serial.println(uSData[1]);
-  Serial.print("Motor offset:");
-  Serial.println(leftMotorOffset);
+  checkSensor(0);
+  Serial.println(uSData[0]);
+  
   leftMotorOffset = constrain(leftMotorOffset, -50, 50);
   leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;
   rightMotorSpeed = defaultDriveSpeed;
