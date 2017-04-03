@@ -84,36 +84,32 @@ void loop() {
 
   leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;
   rightMotorSpeed = defaultDriveSpeed;
-  if (checkButton()==true && (millis()-calStartTime>10000)) {
+  //Calibration
+  if (checkButton() == true && (millis() - calStartTime > 10000)) {
     Serial.println("Calibration initiated");
     if (!calInitialized) {
       calInitialized = true;
       calStartTime = millis();
       checkSensor(1);
       startingPos = uSData[1];
-    }
-    while (millis() - calStartTime < 3000) {
       leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;
       rightMotorSpeed = defaultDriveSpeed;
       drive_LeftMotor.writeMicroseconds(leftMotorSpeed);
       drive_RightMotor.writeMicroseconds(rightMotorSpeed);
-      checkSensor(1);
-      Serial.print("US: ");
-      Serial.println(uSData[1]);
-      if (uSData[1] > startingPos+100) {
-        leftMotorOffset--;
-      }
-      else if (uSData[1] < startingPos-100) {
-        leftMotorOffset++;
-      }
     }
-    calInitialized=false;
-    EEPROM.write(leftMotorOffsetAddressL, lowByte(leftMotorOffset));
-    EEPROM.write(leftMotorOffsetAddressH, highByte(leftMotorOffset));
-    drive_LeftMotor.writeMicroseconds(1500);
-    drive_RightMotor.writeMicroseconds(1500);
-
+    while (millis() - calStartTime < 3000) {
+      //do nothing until 3 seconds have passed
+    }
+    checkSensor(1);
+    leftMotorOffset += (startingPos - uSData[1]) * .05; //motor offset is a function of the final difference in ping times
+    calInitialized = false;
   }
+
+  EEPROM.write(leftMotorOffsetAddressL, lowByte(leftMotorOffset));
+  EEPROM.write(leftMotorOffsetAddressH, highByte(leftMotorOffset));
+  drive_LeftMotor.writeMicroseconds(1500);
+  drive_RightMotor.writeMicroseconds(1500);
+
 
   switch (stage) {
     case (1):
@@ -205,18 +201,18 @@ boolean checkButton() {
     return false;
   }
 }
-inline void checkSensor(int uStoCheck) { //sensors are numbered 0-2 (0 is front, 1 is side, 2 is back)
+void checkSensor(int uStoCheck) { //sensors are numbered 0-2 (0 is front, 1 is side, 2 is back)
   int x = uStoCheck * 2 + 2;
-  int totalPing=0;
-  for (int i=0;i<10;i++){
-  digitalWrite(x, LOW);
-  delayMicroseconds(10);
-  digitalWrite(x, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(x, LOW);
-  totalPing+=pulseIn(x+1,HIGH);
+  int totalPing = 0;
+  for (int i = 0; i < 10; i++) {
+    digitalWrite(x, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(x, LOW);
+    totalPing += pulseIn(x + 1, HIGH, 10000);
   }
-  uSData[uStoCheck] =totalPing/10;
+  if (totalPing / 10 > 0) {
+    uSData[uStoCheck] = totalPing / 10;
+  }
   Serial.print("Sensor ");
   Serial.print(uStoCheck);
   Serial.print(":");
