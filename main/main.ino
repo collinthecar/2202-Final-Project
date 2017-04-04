@@ -30,8 +30,8 @@ byte b_HighByte;
 
 long calStartTime;
 int startingPos;
-int slideUp=90;
-int slideDown=120;
+int slideUp = 90;
+int slideDown = 120;
 int sweepSidePos;
 int wallDone;
 int stage;
@@ -79,22 +79,34 @@ void setup() {
   b_LowByte = EEPROM.read(leftMotorOffsetAddressL);
   b_HighByte = EEPROM.read(leftMotorOffsetAddressH);
   leftMotorOffset = word(b_LowByte, b_HighByte);
+  b_LowByte=EEPROM.read(rightMotorOffsetAddressL);
+  b_HighByte=EEPROM.read(rightMotorOffsetAddressH);
+  rightMotorOffset=word(b_LowByte,b_HighByte);
+  
   Serial.println("EEPROM read");
   //stage=1;
+  encoder_LeftMotor.init(1.0 / 3.0 * MOTOR_393_SPEED_ROTATIONS, MOTOR_393_TIME_DELTA);
+  encoder_LeftMotor.setReversed(false);  // adjust for positive count when moving forward
+  encoder_RightMotor.init(1.0 / 3.0 * MOTOR_393_SPEED_ROTATIONS, MOTOR_393_TIME_DELTA);
+  encoder_RightMotor.setReversed(true);  // adjust for positive count when moving forward
 }
 
 void loop() {
-  /*
-    Serial.println(stage);
-    Serial.print("Left motor speed:");
-    Serial.println(leftMotorSpeed);
-    Serial.print("Right motor speed:");
-    Serial.println(rightMotorSpeed);
-  */
-
-
+  
+    
+    Serial.print("Left motor offset:");
+    Serial.println(leftMotorOffset);
+    Serial.print("Right motor offset:");
+    Serial.println(rightMotorOffset);
+    /*
+    Serial.print("LEFT ENCODER: ");
+    Serial.println(encoder_LeftMotor.getRawPosition());
+    Serial.print("RIGHT ENCODER: ");
+    Serial.println(encoder_RightMotor.getRawPosition());
+    */
+  
   leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;
-  rightMotorSpeed = defaultDriveSpeed;
+  rightMotorSpeed = defaultDriveSpeed+rightMotorOffset;
   //Calibration
   /*Ultrasonic calibration
     if (checkButton() == true && (millis() - calStartTime > 10000)) {
@@ -118,7 +130,7 @@ void loop() {
     leftMotorOffset = constrain(leftMotorOffset, -50, 50);
     }
   */
-  stage=0;
+  stage = 0;
   if (checkButton() == true && (millis() - calStartTime > 10000)) {
     if (!calInitialized) {
       Serial.println("Calibration initiated");
@@ -135,11 +147,11 @@ void loop() {
       drive_RightMotor.writeMicroseconds(1500);
       if (encoder_LeftMotor.getRawPosition() > encoder_RightMotor.getRawPosition()) {
         leftMotorOffset = (encoder_LeftMotor.getRawPosition() - encoder_RightMotor.getRawPosition()) / 4;
-        rightMotorOffset=0;
+        rightMotorOffset = 0;
       }
-      else{
-        rightMotorOffset=(encoder_RightMotor.getRawPosition()-encoder_LeftMotor.getRawPosition())/4;
-        leftMotorOffset=0;
+      else {
+        rightMotorOffset = (encoder_RightMotor.getRawPosition() - encoder_LeftMotor.getRawPosition()) / 4;
+        leftMotorOffset = 0;
       }
       Serial.print("Left motor offset: ");
       Serial.println(leftMotorOffset);
@@ -151,8 +163,8 @@ void loop() {
 
   EEPROM.write(leftMotorOffsetAddressL, lowByte(leftMotorOffset));
   EEPROM.write(leftMotorOffsetAddressH, highByte(leftMotorOffset));
-  EEPROM.write(rightMotorOffsetAddressL,lowByte(rightMotorOffset));
-  EEPROM.write(rightMotorOffsetAddressH,highByte(rightMotorOffset));
+  EEPROM.write(rightMotorOffsetAddressL, lowByte(rightMotorOffset));
+  EEPROM.write(rightMotorOffsetAddressH, highByte(rightMotorOffset));
 
   switch (stage) {
     case (1):
