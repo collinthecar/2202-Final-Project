@@ -2,45 +2,59 @@
 #include <Wire.h>
 #include <uSTimer2.h>
 #include <EEPROM.h>
+#include <I2CEncoder.h>
+
 Servo drive_LeftMotor;
 Servo drive_RightMotor;
 Servo slideMotor;
 Servo sweepMotor;
+bool calInitialized = false;
+I2CEncoder encoder_RightMotor;
+I2CEncoder encoder_LeftMotor;
+
+const int ci_I2C_SDA = A4;
+const int ci_I2C_SCL = A5;
 
 const int leftMotorOffsetAddressL = 0;
 const int leftMotorOffsetAddressH = 1;
+const int rightMotorOffsetAddressL = 2;
+const int rightMotorOffsetAddressH = 3;
+
 
 const int calibrateBtn = 13;
 
 int leftMotorOffset;
+int rightMotorOffset;
 byte b_LowByte;
 byte b_HighByte;
 
-int calInitialized = false;
 long calStartTime;
 int startingPos;
-int slideUp;
-int slideDown;
+int slideUp=90;
+int slideDown=120;
 int sweepSidePos;
 int wallDone;
 int stage;
-int sideVal;
+int sideVal = 420;
 int backVal;
 int driveCor = 5; //change this to modify how much the drive motors should be corrected when bot too close/too far from wall
 int wallTolerance = 10;
 int defaultDriveSpeed = 1700;
 int leftMotorSpeed;
 int rightMotorSpeed;
-int pyramidSensed;//ping time where pyramid is infront of us
+int pyramidSensed = 1600; //ping time where pyramid is infront of us
 
-const int slideMotorPin;
+const int slideMotorPin = 11;
 const int sweepMotorPin = 10;
 const int leftMotorPin = 9;
 const int rightMotorPin = 8;
-const int pyramidButton;
 
-float uSData[3];
+long uSData[2];
 int irData = 0;
+
+void checkSensor(int uStoCheck);
+void checkIR();
+boolean checkButton();
 
 void setup() {
   Serial.begin(2400);
@@ -68,6 +82,7 @@ void setup() {
   Serial.println("EEPROM read");
   //stage=1;
 }
+
 void loop() {
   /*
     Serial.println(stage);
@@ -76,15 +91,13 @@ void loop() {
     Serial.print("Right motor speed:");
     Serial.println(rightMotorSpeed);
   */
-  checkSensor(1);
-  checkSensor(0);
-  Serial.println(uSData[0]);
-  
-  leftMotorOffset = constrain(leftMotorOffset, -50, 50);
+
+
   leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;
   rightMotorSpeed = defaultDriveSpeed;
   //Calibration
-  if (checkButton() == true && (millis() - calStartTime > 10000)) {
+  /*Ultrasonic calibration
+    if (checkButton() == true && (millis() - calStartTime > 10000)) {
     Serial.println("Calibration initiated");
     calStartTime = millis();
     checkSensor(1);
@@ -103,15 +116,44 @@ void loop() {
     checkSensor(1);
     leftMotorOffset += (startingPos - uSData[1]) * .05; //motor offset is a function of the final difference in ping times
     leftMotorOffset = constrain(leftMotorOffset, -50, 50);
+    }
+  */
+  stage=0;
+  if (checkButton() == true && (millis() - calStartTime > 10000)) {
+    if (!calInitialized) {
+      Serial.println("Calibration initiated");
+      calStartTime = millis();
+      encoder_LeftMotor.zero();
+      encoder_RightMotor.zero();
+      calInitialized = true;
+      drive_LeftMotor.writeMicroseconds(leftMotorSpeed);
+      drive_RightMotor.writeMicroseconds(rightMotorSpeed);
+
+    }
+    if (millis() - calStartTime > 5000) {
+      drive_LeftMotor.writeMicroseconds(1500);
+      drive_RightMotor.writeMicroseconds(1500);
+      if (encoder_LeftMotor.getRawPosition() > encoder_RightMotor.getRawPosition()) {
+        leftMotorOffset = (encoder_LeftMotor.getRawPosition() - encoder_RightMotor.getRawPosition()) / 4;
+        rightMotorOffset=0;
+      }
+      else{
+        rightMotorOffset=(encoder_RightMotor.getRawPosition()-encoder_LeftMotor.getRawPosition())/4;
+        leftMotorOffset=0;
+      }
+      Serial.print("Left motor offset: ");
+      Serial.println(leftMotorOffset);
+      Serial.print("Right motor offset: ");
+      Serial.println(rightMotorOffset);
+    }
+
   }
 
   EEPROM.write(leftMotorOffsetAddressL, lowByte(leftMotorOffset));
   EEPROM.write(leftMotorOffsetAddressH, highByte(leftMotorOffset));
-  drive_LeftMotor.writeMicroseconds(1500);
-  drive_RightMotor.writeMicroseconds(1500);
-  Serial.println("Motors Stopped");
+  EEPROM.write(rightMotorOffsetAddressL,lowByte(rightMotorOffset));
+  EEPROM.write(rightMotorOffsetAddressH,highByte(rightMotorOffset));
 
-  stage=2;
   switch (stage) {
     case (1):
       //sweep arm from back to side incase cube is in back corner
@@ -205,20 +247,10 @@ boolean checkButton() {
 }
 void checkSensor(int uStoCheck) { //sensors are numbered 0-2 (0 is front, 1 is side, 2 is back)
   int x = uStoCheck * 2 + 2;
-  int totalPing = 0;
-  for (int i = 0; i < 10; i++) {
-    digitalWrite(x, HIGH);
-    delayMicroseconds(10);
-    digitalWrite(x, LOW);
-    totalPing += pulseIn(x + 1, HIGH, 10000);
-  }
-  if (totalPing / 10 > 0) {
-    uSData[uStoCheck] = totalPing / 10;
-  }
-  Serial.print("Sensor ");
-  Serial.print(uStoCheck);
-  Serial.print(":");
-  Serial.println(uSData[uStoCheck]);
+  digitalWrite(x, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(x, LOW);
+  uSData[uStoCheck] = pulseIn(x + 1, HIGH, 10000);
 }
 void checkIR() {
   if (Serial.available() > 0) {
