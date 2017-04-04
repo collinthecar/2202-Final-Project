@@ -114,7 +114,7 @@ void loop() {
     calStartTime = millis();
     checkSensor(1);
     startingPos = uSData[1];
-    leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;
+    leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;S
     rightMotorSpeed = defaultDriveSpeed;
     drive_LeftMotor.writeMicroseconds(leftMotorSpeed);
     drive_RightMotor.writeMicroseconds(rightMotorSpeed);
@@ -157,6 +157,7 @@ void loop() {
       Serial.print("Right motor offset: ");
       Serial.println(rightMotorOffset);
     }
+    calInitialized=false;
     EEPROM.write(leftMotorOffsetAddressL, lowByte(leftMotorOffset));
     EEPROM.write(leftMotorOffsetAddressH, highByte(leftMotorOffset));
     EEPROM.write(rightMotorOffsetAddressL, lowByte(rightMotorOffset));
