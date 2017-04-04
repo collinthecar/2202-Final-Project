@@ -79,10 +79,10 @@ void setup() {
   b_LowByte = EEPROM.read(leftMotorOffsetAddressL);
   b_HighByte = EEPROM.read(leftMotorOffsetAddressH);
   leftMotorOffset = word(b_LowByte, b_HighByte);
-  b_LowByte=EEPROM.read(rightMotorOffsetAddressL);
-  b_HighByte=EEPROM.read(rightMotorOffsetAddressH);
-  rightMotorOffset=word(b_LowByte,b_HighByte);
-  
+  b_LowByte = EEPROM.read(rightMotorOffsetAddressL);
+  b_HighByte = EEPROM.read(rightMotorOffsetAddressH);
+  rightMotorOffset = word(b_LowByte, b_HighByte);
+
   Serial.println("EEPROM read");
   //stage=1;
   encoder_LeftMotor.init(1.0 / 3.0 * MOTOR_393_SPEED_ROTATIONS, MOTOR_393_TIME_DELTA);
@@ -92,21 +92,21 @@ void setup() {
 }
 
 void loop() {
-  
-    
-    Serial.print("Left motor offset:");
-    Serial.println(leftMotorOffset);
-    Serial.print("Right motor offset:");
-    Serial.println(rightMotorOffset);
-    /*
+
+/*
+  Serial.print("Left motor offset:");
+  Serial.println(leftMotorOffset);
+  Serial.print("Right motor offset:");
+  Serial.println(rightMotorOffset);
+ */
     Serial.print("LEFT ENCODER: ");
     Serial.println(encoder_LeftMotor.getRawPosition());
     Serial.print("RIGHT ENCODER: ");
     Serial.println(encoder_RightMotor.getRawPosition());
-    */
   
+
   leftMotorSpeed = defaultDriveSpeed + leftMotorOffset;
-  rightMotorSpeed = defaultDriveSpeed+rightMotorOffset;
+  rightMotorSpeed = defaultDriveSpeed + rightMotorOffset;
   //Calibration
   /*Ultrasonic calibration
     if (checkButton() == true && (millis() - calStartTime > 10000)) {
@@ -140,9 +140,8 @@ void loop() {
       calInitialized = true;
       drive_LeftMotor.writeMicroseconds(leftMotorSpeed);
       drive_RightMotor.writeMicroseconds(rightMotorSpeed);
-
     }
-    if (millis() - calStartTime > 5000) {
+    if (millis() - calStartTime > 2000) {
       drive_LeftMotor.writeMicroseconds(1500);
       drive_RightMotor.writeMicroseconds(1500);
       if (encoder_LeftMotor.getRawPosition() > encoder_RightMotor.getRawPosition()) {
@@ -158,13 +157,13 @@ void loop() {
       Serial.print("Right motor offset: ");
       Serial.println(rightMotorOffset);
     }
-
+    EEPROM.write(leftMotorOffsetAddressL, lowByte(leftMotorOffset));
+    EEPROM.write(leftMotorOffsetAddressH, highByte(leftMotorOffset));
+    EEPROM.write(rightMotorOffsetAddressL, lowByte(rightMotorOffset));
+    EEPROM.write(rightMotorOffsetAddressH, highByte(rightMotorOffset));
   }
 
-  EEPROM.write(leftMotorOffsetAddressL, lowByte(leftMotorOffset));
-  EEPROM.write(leftMotorOffsetAddressH, highByte(leftMotorOffset));
-  EEPROM.write(rightMotorOffsetAddressL, lowByte(rightMotorOffset));
-  EEPROM.write(rightMotorOffsetAddressH, highByte(rightMotorOffset));
+
 
   switch (stage) {
     case (1):
